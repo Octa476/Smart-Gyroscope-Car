@@ -64,3 +64,14 @@ void USART0_print(const char *str)
     while (*str != '\0')
         USART0_transmit(*str++);
 }
+
+/*
+ * Trasmits a uint32_t number through the USART.
+ *
+ * @param var: the number to send
+ */
+void USART0_print_num(const int32_t var) {
+    char text[20];
+    sprintf(text, "%ld\n", var);
+    USART0_print(text);
+}

@@ -36,4 +36,11 @@ void USART0_transmit(char data);
  */
 void USART0_print(const char *str);
 
+/*
+ * Trasmits a uint32_t number through the USART.
+ *
+ * @param var: the number to send
+ */
+void USART0_print_num(const int32_t var);
+
 #endif // USART_H_
