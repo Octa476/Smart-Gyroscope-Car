@@ -39,10 +39,9 @@ class Remote {
 
         // Gyroscope information.
         const uint16_t samples = 1000;
+        // These two values are used for dynamic calibration.
         float pitch0 = 0;
         float roll0 = 0;
-
-        unsigned long last_time = 0;
 
         // Button information.
         uint8_t num_speed_level = 3;

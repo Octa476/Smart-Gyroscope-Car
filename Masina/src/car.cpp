@@ -3,9 +3,9 @@
 #include <util/delay.h>
 
 volatile long unsigned int car_systicks = 0;
-volatile uint8_t buzzer_divider = 0;
-volatile uint8_t buzzer_max_devide = 0;
-volatile uint16_t base_interval_of_buzzing = 0;
+volatile uint8_t buzzer_divider = 0; // The number of times the frequency of the systicks counter will be divided and used for the buzzer.
+volatile uint8_t buzzer_max_devide = 0; // The max value of the divider mentioned above.
+volatile uint16_t base_interval_of_buzzing = 0; // The base interval of the buzzing efect.
 
 // Systicks and buzzer control.
 void Timer2_init_systicks(void)
@@ -32,7 +32,9 @@ ISR(TIMER2_COMPA_vect)
     /* Will get called [almost] once every 1ms! */
     car_systicks++;
 
+    // If the buzzer_divider is not 0 it means that an obstacle is close.
     if (buzzer_divider) {
+        // Make a toggle sound with a frequency that is inverse proportional to to buzzer_divider.
         uint16_t interval = base_interval_of_buzzing / (buzzer_max_devide - buzzer_divider + 1);
         if (car_systicks % interval < interval / 2) {
             if (car_systicks % buzzer_divider == 0)
@@ -41,6 +43,7 @@ ISR(TIMER2_COMPA_vect)
             PORTB &= ~(1 << BUZ);
         } 
     } else {
+        // Stop the buzzer if no danger is present.
         PORTB &= ~(1 << BUZ);
     }
 }
@@ -54,14 +57,14 @@ void Timer0_init_pwm(void)
     TCCR0A = 0;
     TCCR0B = 0;
 
-    /* TODO Task 1: set Fast PWM (8 bits) */
+    /* Set Fast PWM (8 bits) */
     TCCR0A |= (1 << WGM00) | (1 << WGM01);
 
-    /* TODO Task 1: set inverting output for OC0A and OC0B */
+    /* Set inverting output for OC0A and OC0B */
     TCCR0A |= (1 << COM0A1) | (1 << COM0A0);
     TCCR0A |= (1 << COM0B1) | (1 << COM0B0);
 
-    /* TODO Task 1: set prescaler to 64 */
+    /* Set prescaler to 64 */
     TCCR0B |= (1 << CS01) | (1 << CS00);
 
     /* Set duty cycle to 0%; TOP = 255 */
@@ -76,15 +79,15 @@ void Timer1_init_pwm(void)
     TCCR1A = 0;
     TCCR1B = 0;
 
-    /* TODO Task 1: set Fast PWM (8 bits) */
+    /* Set Fast PWM (8 bits) */
     TCCR1A |= (1 << WGM10);
     TCCR1B |= (1 << WGM12);
 
-    /* TODO Task 1: set inverting output for OC1A and OC1B */
+    /* Set inverting output for OC1A and OC1B */
     TCCR1A |= (1 << COM1A1) | (1 << COM1A0);
     TCCR1A |= (1 << COM1B1) | (1 << COM1B0);
 
-    /* TODO Task 1: set prescaler to 64 */
+    /* Set prescaler to 64 */
     TCCR1B |= (1 << CS11) | (1 << CS10);
 
     /* Set duty cycle to 0%; TOP = 255 */
@@ -94,23 +97,19 @@ void Timer1_init_pwm(void)
 
 
 void Car::tof_init() {
+    // Start I2C and set the XSHUT pins as output.
     Wire.begin();
 
     DDRC |= (1 << XSHUT1);
     DDRC |= (1 << XSHUT2);
-    // pinMode(XSHUT1_ARD, OUTPUT);
-    // pinMode(XSHUT2_ARD, OUTPUT);
 
     // Shut the two sensors.
     PORTC &= ~(1 << XSHUT1);
     PORTC &= ~(1 << XSHUT2);
-    // digitalWrite(XSHUT1_ARD, LOW);
-    // digitalWrite(XSHUT2_ARD, LOW);
 
     _delay_ms(50);
 
     PORTC |= (1 << XSHUT1);
-    // digitalWrite(XSHUT1_ARD, HIGH);
     _delay_ms(50);
 
     if (!tof_sensor1.init()) {
@@ -118,10 +117,10 @@ void Car::tof_init() {
         while (1);
     }
 
+    // Set a new address.
     tof_sensor1.setAddress(0x30);
 
     PORTC |= (1 << XSHUT2);
-    // digitalWrite(XSHUT2_ARD, HIGH);
     _delay_ms(50);
 
     if (!tof_sensor2.init()) {
@@ -129,20 +128,22 @@ void Car::tof_init() {
         while (1);
     }
 
+    // Set a new address.
     tof_sensor2.setAddress(0x31);
 
-    // Make the sensors take measurements as frequently as possible.
+    // Some settings for the sensors.
+
     tof_sensor1.setSignalRateLimit(0.5);
-    // increase laser pulse periods (defaults are 14 and 10 PCLKs)
+    // Increase laser pulse periods (defaults are 14 and 10 PCLKs)
     tof_sensor1.setVcselPulsePeriod(VL53L0X::VcselPeriodPreRange, 18);
     tof_sensor1.setVcselPulsePeriod(VL53L0X::VcselPeriodFinalRange, 14);
 
     tof_sensor2.setSignalRateLimit(0.5);
-    // increase laser pulse periods (defaults are 14 and 10 PCLKs)
+    // Increase laser pulse periods (defaults are 14 and 10 PCLKs)
     tof_sensor2.setVcselPulsePeriod(VL53L0X::VcselPeriodPreRange, 18);
     tof_sensor2.setVcselPulsePeriod(VL53L0X::VcselPeriodFinalRange, 14);
     
-    
+    // The time a sensor can spend while computing a distance is 40ms.
     tof_sensor1.setMeasurementTimingBudget(40000);
     tof_sensor2.setMeasurementTimingBudget(40000);
 
@@ -156,19 +157,21 @@ void Car::buzzer_init() {
 }
 
 void Car::motors_init() {
+    // Init the PWM used for the motors.
     Timer0_init_pwm();
     Timer1_init_pwm();
     DDRB |= (1 << PWM3);
     DDRB |= (1 << PWM4);
     DDRD |= (1 << PWM1);
     DDRD |= (1 << PWM2);
+    // The car is not moving when it starts.
     recv_message.x_angle = 0;
     recv_message.y_angle = 0;
     recv_message.speed_level = 0;
 }
 
 void Car::antenna_init() {
-    USART0_print("antena\n");
+    USART0_print("Antena init start\n");
     radio.begin();
 
     radio.openReadingPipe(0, address);
@@ -176,8 +179,9 @@ void Car::antenna_init() {
 
     radio.setPALevel(RF24_PA_LOW);
 
+    // The car is in receive mode on default.
     radio.startListening();
-    USART0_print("antena\n");
+    USART0_print("Antena init end\n");
 }
 
 Car::Car() {
@@ -190,6 +194,7 @@ Car::Car() {
     motors_init();
 }
 
+// Update the distance to front or back obstacles.
 void Car::update_tof() {
     distance_to_obstacle1 = tof_sensor1.readRangeSingleMillimeters();
     if (tof_sensor1.timeoutOccurred() || distance_to_obstacle1 < sensor_distance_limit) {
@@ -201,6 +206,8 @@ void Car::update_tof() {
     }
 }
 
+// This method sets the buzzer_divider, so it controls if the buzzer signals danger or not based
+// on the distances to obstacles.
 void Car::update_buzzer() {
     int16_t distance_to_danger1 = distance_to_obstacle1;
     int16_t distance_to_danger2 = distance_to_obstacle2;
@@ -226,7 +233,7 @@ void Car::update_buzzer() {
 }
 
 void Car::update_motors() {
-    // Testing with the angles.
+    // Testing with the angles, decomment this for debug purposes.
     // recv_message.x_angle = -10;
     // recv_message.y_angle = 0;
     // recv_message.speed_level = 2;
@@ -236,9 +243,10 @@ void Car::update_motors() {
     float x_ang = recv_message.x_angle;
     float y_ang = recv_message.y_angle;
     uint16_t speed_lvl = recv_message.speed_level;
-    USART0_print("Angle: ");
-    USART0_print_num(recv_message.x_angle);
+    // USART0_print("Angle: ");
+    // USART0_print_num(recv_message.x_angle);
 
+    // Calculate the speed of the motors based on the level and the speed limit.
     int16_t speed = speed_limit * (1 + speed_lvl) / 3;
     left_motor_speed = x_ang * speed / 20;
     right_motor_speed = x_ang * speed / 20;
@@ -246,6 +254,7 @@ void Car::update_motors() {
     USART0_print("Speed: ");
     USART0_print_num(speed);
 
+    // Have some tolerance for the turns.
     if (y_ang > 5) {
         y_ang = (y_ang > 45) ? 45 : y_ang;
         if (right_motor_speed > 0)
@@ -299,6 +308,7 @@ void Car::update_motors() {
         right_motor_speed = 0;
     }
 
+    // Some debug info for the final speed of the motors.
     USART0_print("Right_speed: ");
     USART0_print_num(right_motor_speed);
     USART0_print("Left_speed: ");
@@ -323,7 +333,7 @@ void Car::update_motors() {
 }
 
 void Car::update_antenna() {
-    // Rx mode.
+    // Rx mode, this is the default role of the car.
     if (radio.available()) {
         radio.read(&recv_message, sizeof(recv_message));
 
@@ -331,7 +341,7 @@ void Car::update_antenna() {
         USART0_print_num(recv_message.x_angle);
         USART0_print_num(recv_message.y_angle);
 
-        // switch to TX
+        // Switch to TX but just for one sending.
         radio.stopListening();
 
         reply++;
@@ -341,7 +351,7 @@ void Car::update_antenna() {
         Serial.print("TX: ");
         Serial.println(reply);
 
-        // back to RX
+        // Back to RX
         radio.startListening();
         missed_receives = 0;
         remote_connected = true;
@@ -349,11 +359,14 @@ void Car::update_antenna() {
         missed_receives++;
     }
 
+    // If the remote is not responding after 10 tries, them the connection is declared cut.
     if (missed_receives > 10) {
         remote_connected = false;
     }
 }
 
+// Just update everything, if you are here Cezar, I want to give you all my respect!
+// Give me a message on teams if you arrived here!
 void Car::update_car() {
     update_antenna();
     update_tof();
