@@ -11,8 +11,8 @@
 // This struct will be used to comunicate with the remote.
 // It contains the angles of the remote and the information if there is an incoming obstacle or not.
 struct Message {
-    int16_t x_angle; // Angle between [-90, 90]
-    int16_t y_angle; // Angle between [-90, 90]
+    float x_angle; // Angle between [-90, 90]
+    float y_angle; // Angle between [-90, 90]
     uint16_t speed_level; // 0, 1, 2
     uint8_t danger_front; // 1 for danger, 0 otherwise
     uint8_t danger_back; // 1 for danger, 0 otherwise
@@ -23,7 +23,7 @@ class Remote {
         // Antenna information.
         struct Message recv_message;
         struct Message send_message;
-        RF24 radio{CE, CSN};
+        RF24 radio {CE, CSN};
         uint32_t reply = 0;
         uint32_t missed_receives = 0;
         static constexpr byte address[6] = "00001";
@@ -37,9 +37,6 @@ class Remote {
 
         // Gyroscope information.
         const uint16_t samples = 1000;
-        float pitch = 0;
-        float roll = 0;
-
         float pitch0 = 0;
         float roll0 = 0;
 
@@ -54,7 +51,7 @@ class Remote {
         void display_init();
         void gyro_init();
 
-        void calibrate();
+        void autoCalibrateAccelerometer();
         
         void update_buttons();
         void update_leds();

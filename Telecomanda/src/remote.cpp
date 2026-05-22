@@ -59,21 +59,19 @@ void buttons_interrupt_init() {
 }
 
 // ISR for PORTC pin change interrupts
-unsigned long int last_tick = 0;
+volatile unsigned long int last_tick = 0;
 ISR(PCINT1_vect) {
-    if ((remote_systicks - last_tick >= 5) && (remote_systicks - last_tick <= 500)) {
+    // if ((remote_systicks - last_tick >= 30) && (remote_systicks - last_tick <= 200)) {
         // BUT1 (A0 / PC0)
         if (!(PINC & (1 << PC0))) {
             but1_pressed = true;
-            // Serial.println("Buton1");
         }
 
         // BUT2 (A1 / PC1)
         if (!(PINC & (1 << PC1))) {
             but2_pressed = true;
-            // Serial.println("Buton2");
         }
-    }
+    // }
 
     last_tick = remote_systicks;
 }
@@ -104,17 +102,40 @@ void Remote::display_init() {
 
 }
 
-void autoCalibrateAccelerometer() {
-  // Configure accelerometer for auto-calibration
-  Wire.beginTransmission(BMI160_I2C_ADDRESS);
-  Wire.write(0x7E); // Command register
-  Wire.write(0x37); // Start accelerometer offset calibration
-  Wire.endTransmission();
-  delay(100);
- 
-  // Wait for calibration to complete
-  delay(2000);
-  Serial.println("Accelerometer Auto-Calibration Complete");
+void Remote::autoCalibrateAccelerometer() {
+    // Configure accelerometer for auto-calibration
+    Wire.beginTransmission(BMI160_I2C_ADDRESS);
+    Wire.write(0x7E); // Command register
+    Wire.write(0x37); // Start accelerometer offset calibration
+    Wire.endTransmission();
+    delay(100);
+    
+    // Wait for calibration to complete
+    delay(2000);
+    Serial.println("Accelerometer Auto-Calibration Complete");
+
+    int16_t ax, ay, az;
+    // Read accelerometer data
+    Wire.beginTransmission(BMI160_I2C_ADDRESS);
+    Wire.write(0x12); // Start register for accelerometer data
+    Wire.endTransmission(false);
+    Wire.requestFrom(BMI160_I2C_ADDRESS, 6);
+
+    if (Wire.available() == 6) {
+        ax = (Wire.read() | (Wire.read() << 8));
+        ay = (Wire.read() | (Wire.read() << 8));
+        az = (Wire.read() | (Wire.read() << 8));
+    }
+
+    // Convert raw accelerometer values to g
+    float ax_g = ax / ACCEL_SENSITIVITY;
+    float ay_g = ay / ACCEL_SENSITIVITY;
+    float az_g = az / ACCEL_SENSITIVITY;
+
+    // Calculate tilt angles (pitch and roll) in degrees
+    pitch0 = atan2(ay_g, sqrt(ax_g * ax_g + az_g * az_g)) * 180.0 / PI;
+    roll0 = atan2(-ax_g, az_g) * 180.0 / PI;
+    but1_pressed = false;
 }
 
 void Remote::gyro_init() {
@@ -135,10 +156,6 @@ void Remote::gyro_init() {
     calibration_blue = 2;
 }
 
-void Remote::calibrate() {
-
-}
-
 Remote::Remote() {
     Timer2_init_systicks();
     gyro_init();
@@ -146,6 +163,7 @@ Remote::Remote() {
     leds_init();
     antenna_init();
     display_init();
+    send_message.speed_level = 0;
 }
 
 void Remote::update_remote() {
@@ -159,11 +177,13 @@ void Remote::update_remote() {
 void Remote::update_buttons() {
     // Start calibration.
     if (but1_pressed) {
+        Serial.println("Buton1");
         calibration_blue = 1;
         but1_pressed = false;
     }
 
     if (but2_pressed) {
+        Serial.println("Buton2");
         send_message.speed_level = (send_message.speed_level + 1) % num_speed_level;
         Serial.println("speed: ");
         Serial.println(send_message.speed_level);
@@ -185,12 +205,39 @@ void Remote::update_display() {
 }
 
 void Remote::update_antenna() {
+    // TX mode
+    radio.stopListening();
 
+    radio.write(&send_message, sizeof(send_message));
+
+    Serial.print("TX: ");
+    Serial.println(reply);
+
+    // RX mode
+    radio.startListening();
+
+    unsigned long start = remote_systicks;
+
+    while (!radio.available()) {
+
+        if (remote_systicks - start > 200) {
+
+            Serial.println("timeout");
+            return;
+        }
+    }
+    reply++;
+
+    radio.read(&recv_message, sizeof(recv_message));
+
+    Serial.print("RX: ");
+    Serial.println(reply);
 }
 
 void Remote::update_gyro() {
     if (calibration_blue == 1) {
         autoCalibrateAccelerometer();
+        calibration_blue = 2;
     } else {
         int16_t ax, ay, az;
  
@@ -214,7 +261,12 @@ void Remote::update_gyro() {
         // Calculate tilt angles (pitch and roll) in degrees
         float pitch = atan2(ay_g, sqrt(ax_g * ax_g + az_g * az_g)) * 180.0 / PI;
         float roll = atan2(-ax_g, az_g) * 180.0 / PI;
+
+        pitch -= pitch0;
+        roll -= roll0;
         
+        send_message.x_angle = -pitch;
+        send_message.y_angle = roll;
         // Print tilt angles
         Serial.print("Pitch: ");
         Serial.print(pitch, 2);

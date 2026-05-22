@@ -14,8 +14,8 @@
 // This struct will be used to comunicate with the remote.
 // It contains the angles of the remote and the information if there is an incoming obstacle or not.
 struct Message {
-    int16_t x_angle; // Angle between [-90, 90]
-    int16_t y_angle; // Angle between [-90, 90]
+    float x_angle; // Angle between [-90, 90]
+    float y_angle; // Angle between [-90, 90]
     uint16_t speed_level; // 0, 1, 2
     uint8_t danger_front; // 1 for danger, 0 otherwise
     uint8_t danger_back; // 1 for danger, 0 otherwise
@@ -35,14 +35,14 @@ class Car {
         uint16_t distance_to_obstacle2 {250};
         VL53L0X tof_sensor1;
         VL53L0X tof_sensor2;
-        const uint8_t danger_buffer {120};
-        const uint8_t sensor_distance_limit {50};
+        const uint16_t danger_buffer {240};
+        const uint16_t sensor_distance_limit {40};
         
         // Antenna information.
         struct Message recv_message;
         struct Message send_message;
         bool remote_connected {false};
-        RF24 radio{CE_ARD, CSN_ARD};
+        RF24 radio {CE_ARD, CSN_ARD};
         uint32_t reply = 0;
         uint32_t missed_receives = 0;
         static constexpr byte address[6] = "00001";

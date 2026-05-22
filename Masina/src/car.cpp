@@ -132,8 +132,19 @@ void Car::tof_init() {
     tof_sensor2.setAddress(0x31);
 
     // Make the sensors take measurements as frequently as possible.
-    tof_sensor1.startContinuous();
-    tof_sensor2.startContinuous();
+    tof_sensor1.setSignalRateLimit(0.5);
+    // increase laser pulse periods (defaults are 14 and 10 PCLKs)
+    tof_sensor1.setVcselPulsePeriod(VL53L0X::VcselPeriodPreRange, 18);
+    tof_sensor1.setVcselPulsePeriod(VL53L0X::VcselPeriodFinalRange, 14);
+
+    tof_sensor2.setSignalRateLimit(0.5);
+    // increase laser pulse periods (defaults are 14 and 10 PCLKs)
+    tof_sensor2.setVcselPulsePeriod(VL53L0X::VcselPeriodPreRange, 18);
+    tof_sensor2.setVcselPulsePeriod(VL53L0X::VcselPeriodFinalRange, 14);
+    
+    
+    tof_sensor1.setMeasurementTimingBudget(40000);
+    tof_sensor2.setMeasurementTimingBudget(40000);
 
     USART0_print("VL53L0X READY\n");
 }
@@ -151,9 +162,13 @@ void Car::motors_init() {
     DDRB |= (1 << PWM4);
     DDRD |= (1 << PWM1);
     DDRD |= (1 << PWM2);
+    recv_message.x_angle = 0;
+    recv_message.y_angle = 0;
+    recv_message.speed_level = 0;
 }
 
 void Car::antenna_init() {
+    USART0_print("antena\n");
     radio.begin();
 
     radio.openReadingPipe(0, address);
@@ -162,6 +177,7 @@ void Car::antenna_init() {
     radio.setPALevel(RF24_PA_LOW);
 
     radio.startListening();
+    USART0_print("antena\n");
 }
 
 Car::Car() {
@@ -175,8 +191,14 @@ Car::Car() {
 }
 
 void Car::update_tof() {
-    distance_to_obstacle1 = tof_sensor1.readRangeContinuousMillimeters();
-    distance_to_obstacle2 = tof_sensor2.readRangeContinuousMillimeters();
+    distance_to_obstacle1 = tof_sensor1.readRangeSingleMillimeters();
+    if (tof_sensor1.timeoutOccurred() || distance_to_obstacle1 < sensor_distance_limit) {
+        distance_to_obstacle1 = 800;
+    }
+    distance_to_obstacle2 = tof_sensor2.readRangeSingleMillimeters();
+    if (tof_sensor2.timeoutOccurred() || distance_to_obstacle2 < sensor_distance_limit) {
+        distance_to_obstacle2 = 800;
+    }
 }
 
 void Car::update_buzzer() {
@@ -187,37 +209,39 @@ void Car::update_buzzer() {
     distance_to_danger2 = (distance_to_obstacle2 < sensor_distance_limit) ? 500 : distance_to_danger2;
 
     int16_t min_distance = fmin(distance_to_danger1, distance_to_danger2);
-    // USART0_print("MIN: ");
-    // USART0_print_num(min_distance);
+    USART0_print("MIN: ");
+    USART0_print_num(min_distance);
+    USART0_print_num(distance_to_obstacle1);
+    USART0_print_num(distance_to_obstacle2);
 
     // Determine how dangerous the distance is, and set the buzzer acordingly.
-    frequency_divider = (min_distance - sensor_distance_limit) * range_of_dividers / danger_buffer + 1;
+    frequency_divider = (min_distance - sensor_distance_limit) * range_of_dividers / danger_buffer / 2 + 1;
 
     if (frequency_divider > range_of_dividers)
         frequency_divider = 0;
 
 
     buzzer_divider = frequency_divider;
-    // USART0_print_num(buzzer_divider);
+    USART0_print_num(buzzer_divider);
 }
 
 void Car::update_motors() {
     // Testing with the angles.
-    recv_message.x_angle = -25;
-    recv_message.y_angle = -10;
-    recv_message.speed_level = 2;
-    remote_connected = true;
+    // recv_message.x_angle = -10;
+    // recv_message.y_angle = 0;
+    // recv_message.speed_level = 2;
+    // remote_connected = true;
 
     // Calculate the speed of the motors based on the input received from the remote.
-    int16_t x_ang = recv_message.x_angle;
-    int16_t y_ang = recv_message.y_angle;
+    float x_ang = recv_message.x_angle;
+    float y_ang = recv_message.y_angle;
     uint16_t speed_lvl = recv_message.speed_level;
     USART0_print("Angle: ");
     USART0_print_num(recv_message.x_angle);
 
     int16_t speed = speed_limit * (1 + speed_lvl) / 3;
-    left_motor_speed = x_ang * speed / 45;
-    right_motor_speed = x_ang * speed / 45;
+    left_motor_speed = x_ang * speed / 20;
+    right_motor_speed = x_ang * speed / 20;
 
     USART0_print("Speed: ");
     USART0_print_num(speed);
@@ -225,15 +249,15 @@ void Car::update_motors() {
     if (y_ang > 5) {
         y_ang = (y_ang > 45) ? 45 : y_ang;
         if (right_motor_speed > 0)
-            right_motor_speed -= right_motor_speed * y_ang / 90;
+            right_motor_speed -= right_motor_speed * y_ang / 45;
         if (right_motor_speed < 0)
-            right_motor_speed -= right_motor_speed * y_ang / 90;
+            right_motor_speed -= right_motor_speed * y_ang / 45;
     } else if (y_ang < -5) {
         y_ang = (y_ang < -45) ? -45 : y_ang;
         if (left_motor_speed > 0)
-            left_motor_speed -= left_motor_speed * (-y_ang) / 90;
+            left_motor_speed -= left_motor_speed * (-y_ang) / 45;
         if (left_motor_speed < 0)
-            left_motor_speed -= left_motor_speed * (-y_ang) / 90;
+            left_motor_speed -= left_motor_speed * (-y_ang) / 45;
     }
     
 
@@ -246,14 +270,14 @@ void Car::update_motors() {
 
 
     // Calculate the distance to an obstacle.
-    int16_t distance_to_danger_back = distance_to_obstacle1;
-    int16_t distance_to_danger_front = distance_to_obstacle2;
+    uint16_t distance_to_danger_back = distance_to_obstacle1;
+    uint16_t distance_to_danger_front = distance_to_obstacle2;
 
     distance_to_danger_back = (distance_to_obstacle1 < sensor_distance_limit) ? 500 : distance_to_danger_back;
     distance_to_danger_front = (distance_to_obstacle2 < sensor_distance_limit) ? 500 : distance_to_danger_front;
 
     // Stop the motors if the given command would result in a collision.
-    if (distance_to_danger_front < danger_buffer * 2 / 3) {
+    if (distance_to_danger_front < danger_buffer * 2) {
         send_message.danger_front = 1;
         left_motor_speed = (left_motor_speed > 0) ? 0 : left_motor_speed;
         right_motor_speed = (right_motor_speed > 0) ? 0 : right_motor_speed;
@@ -261,7 +285,7 @@ void Car::update_motors() {
         send_message.danger_front = 0;
     }
 
-    if (distance_to_danger_back < danger_buffer) {
+    if (distance_to_danger_back < danger_buffer * 2) {
         send_message.danger_back = 1;
         left_motor_speed = (left_motor_speed < 0) ? 0 : left_motor_speed;
         right_motor_speed = (right_motor_speed < 0) ? 0 : right_motor_speed;
@@ -304,6 +328,7 @@ void Car::update_antenna() {
         radio.read(&recv_message, sizeof(recv_message));
 
         USART0_print("RX: ");
+        USART0_print_num(recv_message.x_angle);
         USART0_print_num(recv_message.y_angle);
 
         // switch to TX

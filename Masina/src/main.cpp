@@ -17,6 +17,7 @@
 #define PM_BAUD 9600
 
 void setup_init() {
+  init(); 
   USART0_init(CALC_USART_UBRR(PM_BAUD));
   sei();
   _delay_ms(5000);
@@ -30,7 +31,7 @@ int main() {
   setup_init();
   Car car = Car();
   while (true) {
-    _delay_ms(100);
+    _delay_ms(50);
     char text[100];
     sprintf(text, "%lu\n", car_systicks);
 

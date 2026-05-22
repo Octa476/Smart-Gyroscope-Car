@@ -12,7 +12,7 @@ void loop() {
   Serial.println("bunaa");
   Remote remote = Remote();
   while (true) {
-    delay(1000);
+    delay(50);
     remote.update_remote();
     Serial.println(remote_systicks);
   }
