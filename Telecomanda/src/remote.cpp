@@ -99,7 +99,21 @@ void Remote::antenna_init() {
 }
 
 void Remote::display_init() {
+    // init SPI + display
+    display.init(170, 320);
 
+    // orientare
+    display.setRotation(2);
+
+    // fundal
+    display.fillScreen(ST77XX_BLACK);
+
+    // text
+    display.setTextSize(4);
+    display.setTextColor(ST77XX_WHITE);
+
+    display.setCursor(20, 40);
+    display.println("Hello!");
 }
 
 void Remote::autoCalibrateAccelerometer() {
@@ -164,6 +178,8 @@ Remote::Remote() {
     antenna_init();
     display_init();
     send_message.speed_level = 0;
+    recv_message.danger_back = false;
+    recv_message.danger_front = false;
 }
 
 void Remote::update_remote() {
@@ -194,14 +210,46 @@ void Remote::update_buttons() {
 }
 
 void Remote::update_leds() {
+    danger_white = recv_message.danger_back || recv_message.danger_front;
     if (calibration_blue == 2)
         digitalWrite(LED1, HIGH);
-    if (danger_red)
+    if (danger_white)
         digitalWrite(LED2, HIGH);
+    else
+        digitalWrite(LED2, LOW);
 }
 
 void Remote::update_display() {
+    display.fillScreen(ST77XX_BLACK);
+    if (calibration_blue == 1) {
+        display.setTextSize(3);
+        display.setCursor(10, 40);
+        display.println("Gyroscope calibration...");
+    } else {
+        display.setTextSize(3);
+        display.setCursor(10, 40);
+        display.println("Angles:");
+        display.setCursor(10, 80);
+        display.print("X:");
+        display.println(send_message.x_angle);
+        display.setCursor(10, 120);
+        display.print("Y:");
+        display.println(send_message.y_angle);
+        display.setCursor(10, 160);
+        display.print("Speed: ");
+        display.println(send_message.speed_level + 1);
 
+        if (recv_message.danger_back && recv_message.danger_front) {
+            display.setCursor(10, 200);
+            display.print("Danger A");
+        } else if (recv_message.danger_back) {
+            display.setCursor(10, 200);
+            display.print("Danger B");
+        } else if (recv_message.danger_front) {
+            display.setCursor(10, 200);
+            display.print("Danger F");
+        }
+    }
 }
 
 void Remote::update_antenna() {

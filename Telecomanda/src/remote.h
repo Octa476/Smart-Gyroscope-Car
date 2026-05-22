@@ -5,6 +5,8 @@
 #include <SPI.h>
 #include <nRF24L01.h>
 #include <RF24.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_ST7789.h>
 
 #include "definitions.h"
 
@@ -29,7 +31,7 @@ class Remote {
         static constexpr byte address[6] = "00001";
 
         // Led information.
-        bool danger_red = false;
+        bool danger_white = false;
         // 0 for not calibrated, 1 for calibrating, 2 for calibrated.
         uint8_t calibration_blue = 0;
         const uint16_t led_interval = 1000;
@@ -44,6 +46,9 @@ class Remote {
 
         // Button information.
         uint8_t num_speed_level = 3;
+
+        // Display information.
+        Adafruit_ST7789 display = Adafruit_ST7789(CS_DISPLAY, DC_DISPLAY, RST_DISPLAY);
 
         void buttons_init();
         void leds_init();

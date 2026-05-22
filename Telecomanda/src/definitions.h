@@ -29,10 +29,10 @@
 #define CSN 8
 
 // Display.
-#define DC 5
-#define RST 6
+#define DC_DISPLAY 5
+#define RST_DISPLAY 6
 #define BL 9
-#define CS 10
+#define CS_DISPLAY 10
 
 // General SPI.
 #define MOSI 11
